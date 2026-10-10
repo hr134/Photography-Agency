@@ -32,6 +32,27 @@ def create_app(config_name="development"):
         as_attachment = bool(download and str(download).lower() in ['1', 'true', 'yes'])
         return send_from_directory(upload_folder, filename, as_attachment=as_attachment)
 
+    # Root status endpoint (prevents 404 when opening Render URL directly in browser)
+    @app.route('/')
+    def index():
+        return {
+            "status": "online",
+            "message": "Photography Agency & Developer REST API is running successfully!",
+            "version": "1.0.0",
+            "endpoints": {
+                "packages": "/api/packages",
+                "portfolio": "/api/portfolio",
+                "bookings": "/api/bookings",
+                "contact": "/api/contact",
+                "dev_projects": "/api/dev-projects",
+                "auth": "/api/auth/login"
+            }
+        }, 200
+
+    @app.route('/api/health')
+    def health():
+        return {"status": "ok"}, 200
+
     return app
 
 # Expose default application instance for WSGI runners (e.g. gunicorn app:app)
