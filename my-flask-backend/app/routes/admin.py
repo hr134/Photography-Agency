@@ -1,3 +1,4 @@
+import os
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from functools import wraps
@@ -172,6 +173,132 @@ def get_booking(booking_id):
     
     return jsonify(data), 200
 
+
+def _send_status_change_email(booking, status_changed, workflow_changed):
+    try:
+        from app.services.email_service import send_email
+        subject_parts = []
+        
+        booking_ref = booking.booking_number or f"BK-{booking.id:06d}"
+        package_name = booking.package.name if booking.package else "Unknown Package"
+        site_url = os.environ.get("FRONTEND_URL", "https://photography-agency.onrender.com").rstrip("/")
+        bookings_url = f"{site_url}/dashboard"
+        
+        update_lines_html = ""
+        update_lines_plain = ""
+        
+        if status_changed:
+            subject_parts.append("Booking Status")
+            update_lines_html += f"""
+              <tr style="border-bottom:1px solid #2e2e2e;">
+                <td style="padding:12px 16px;font-size:12px;color:#888;width:45%;">Booking Status</td>
+                <td style="padding:12px 16px;font-size:13px;color:#d8c3a5;font-weight:700;">{booking.status}</td>
+              </tr>"""
+            update_lines_plain += f"Booking Status : {booking.status}\n"
+            
+        if workflow_changed:
+            subject_parts.append("Workflow Status")
+            update_lines_html += f"""
+              <tr>
+                <td style="padding:12px 16px;font-size:12px;color:#888;width:45%;">Workflow Progress</td>
+                <td style="padding:12px 16px;font-size:13px;color:#d8c3a5;font-weight:700;">{booking.workflow_status or 'N/A'}</td>
+              </tr>"""
+            update_lines_plain += f"Workflow Progress: {booking.workflow_status or 'N/A'}\n"
+
+        subject = f"Update on your Veloura Booking ({booking_ref}): {' & '.join(subject_parts)}"
+        
+        plain_body = f"""Dear {booking.client_name or booking.user.username},
+
+Your booking has been updated. Here are the latest details:
+
+Booking Ref : {booking_ref}
+Package     : {package_name}
+{update_lines_plain}
+View your booking: {bookings_url}
+
+Best Regards,
+Veloura Creations Team"""
+
+        html_body = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Booking Update</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f0eb;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f0eb;padding:24px 12px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:520px;background:#1a1a1a;border-radius:16px;overflow:hidden;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#2a2a2a 0%,#1a1a1a 100%);padding:28px 24px 20px;text-align:center;border-bottom:1px solid #333;">
+            <p style="margin:0 0 6px;font-size:11px;letter-spacing:3px;color:#d8c3a5;text-transform:uppercase;">Veloura Creations</p>
+            <h1 style="margin:0;font-size:20px;color:#ffffff;font-weight:600;">Booking Updated</h1>
+            <p style="margin:8px 0 0;font-size:12px;color:#888;">Here is the latest status of your booking</p>
+          </td>
+        </tr>
+
+        <!-- Greeting -->
+        <tr>
+          <td style="padding:24px 24px 0;">
+            <p style="margin:0;font-size:14px;color:#cccccc;line-height:1.6;">
+              Dear <strong style="color:#ffffff;">{booking.client_name or booking.user.username}</strong>,<br/><br/>
+              Your booking with Veloura Creations has been updated by our team.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Booking Badge -->
+        <tr>
+          <td style="padding:20px 24px 0;text-align:center;">
+            <span style="display:inline-block;background:#d8c3a5;color:#1a1a1a;font-size:13px;font-weight:700;letter-spacing:1px;padding:8px 20px;border-radius:20px;">
+              {booking_ref}
+            </span>
+          </td>
+        </tr>
+
+        <!-- Changes Table -->
+        <tr>
+          <td style="padding:20px 24px 0;">
+            <p style="margin:0 0 10px;font-size:10px;letter-spacing:2px;color:#d8c3a5;text-transform:uppercase;font-weight:600;">Updated Details</p>
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#242424;border-radius:10px;overflow:hidden;">
+              {update_lines_html}
+            </table>
+          </td>
+        </tr>
+
+        <!-- CTA Button -->
+        <tr>
+          <td style="padding:24px;text-align:center;">
+            <a href="{bookings_url}" style="display:inline-block;background:#d8c3a5;color:#1a1a1a;text-decoration:none;font-size:14px;font-weight:700;padding:14px 32px;border-radius:30px;letter-spacing:0.5px;">
+              View in Dashboard →
+            </a>
+            <p style="margin:16px 0 0;font-size:11px;color:#555;">Or paste this link in your browser:<br/>
+              <a href="{bookings_url}" style="color:#d8c3a5;word-break:break-all;">{bookings_url}</a>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding:0 24px 24px;text-align:center;border-top:1px solid #2a2a2a;">
+            <p style="margin:16px 0 4px;font-size:11px;color:#555;">Best Regards, <strong style="color:#888;">Veloura Creations Team</strong></p>
+            <p style="margin:0;font-size:10px;color:#444;letter-spacing:1px;">VELOURA CREATIONS &bull; AUTOMATED STATUS UPDATE</p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+        send_email(booking.user.email, subject, plain_body, html_body=html_body)
+    except Exception as email_err:
+        print(f"Non-critical error sending status email: {email_err}")
+
+
 @admin_bp.route('/bookings/<int:booking_id>', methods=['PUT'])
 @admin_required
 def update_booking(booking_id):
@@ -240,130 +367,7 @@ def update_booking(booking_id):
     workflow_changed = (old_workflow_status != booking.workflow_status)
     
     if (status_changed or workflow_changed) and booking.user and booking.user.email:
-        from app.services.email_service import send_email
-        subject_parts = []
-        
-        booking_ref = booking.booking_number or f"BK-{booking.id:06d}"
-        package_name = booking.package.name if booking.package else "Unknown Package"
-        site_url = os.environ.get("FRONTEND_URL", "https://photography-agency.onrender.com").rstrip("/")
-        bookings_url = f"{site_url}/dashboard"
-        
-        update_lines_html = ""
-        update_lines_plain = ""
-        
-        if status_changed:
-            subject_parts.append("Booking Status")
-            update_lines_html += f"""
-              <tr style="border-bottom:1px solid #2e2e2e;">
-                <td style="padding:12px 16px;font-size:12px;color:#888;width:45%;">Booking Status</td>
-                <td style="padding:12px 16px;font-size:13px;color:#d8c3a5;font-weight:700;">{booking.status}</td>
-              </tr>"""
-            update_lines_plain += f"Booking Status : {booking.status}\n"
-            
-        if workflow_changed:
-            subject_parts.append("Workflow Status")
-            update_lines_html += f"""
-              <tr>
-                <td style="padding:12px 16px;font-size:12px;color:#888;width:45%;">Workflow Progress</td>
-                <td style="padding:12px 16px;font-size:13px;color:#d8c3a5;font-weight:700;">{booking.workflow_status or 'N/A'}</td>
-              </tr>"""
-            update_lines_plain += f"Workflow Progress: {booking.workflow_status or 'N/A'}\n"
-
-        subject = f"Update on your Veloura Booking ({booking_ref}): {' & '.join(subject_parts)}"
-        
-        plain_body = f"""Dear {booking.client_name or booking.user.username},
-
-Your booking has been updated. Here are the latest details:
-
-Booking Ref : {booking_ref}
-Package     : {package_name}
-{update_lines_plain}
-View your booking: {bookings_url}
-
-Best Regards,
-Veloura Creations Team"""
-
-        html_body = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Booking Update</title>
-</head>
-<body style="margin:0;padding:0;background:#f4f0eb;font-family:'Helvetica Neue',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f0eb;padding:24px 12px;">
-    <tr><td align="center">
-      <table width="100%" style="max-width:520px;background:#1a1a1a;border-radius:16px;overflow:hidden;">
-
-        <!-- Header -->
-        <tr>
-          <td style="background:linear-gradient(135deg,#2a2a2a 0%,#1a1a1a 100%);padding:28px 24px 20px;text-align:center;border-bottom:1px solid #333;">
-            <p style="margin:0 0 6px;font-size:11px;letter-spacing:3px;color:#d8c3a5;text-transform:uppercase;">Veloura Creations</p>
-            <h1 style="margin:0;font-size:20px;color:#ffffff;font-weight:600;">Booking Updated</h1>
-            <p style="margin:8px 0 0;font-size:12px;color:#888;">Your booking has a new status update</p>
-          </td>
-        </tr>
-
-        <!-- Greeting -->
-        <tr>
-          <td style="padding:24px 24px 0;">
-            <p style="margin:0;font-size:14px;color:#cccccc;line-height:1.6;">
-              Dear <strong style="color:#ffffff;">{booking.client_name or booking.user.username}</strong>,<br/><br/>
-              There is an update on your booking. Please see the details below.
-            </p>
-          </td>
-        </tr>
-
-        <!-- Booking Badge -->
-        <tr>
-          <td style="padding:20px 24px 0;text-align:center;">
-            <span style="display:inline-block;background:#d8c3a5;color:#1a1a1a;font-size:13px;font-weight:700;letter-spacing:1px;padding:8px 20px;border-radius:20px;">
-              {booking_ref}
-            </span>
-          </td>
-        </tr>
-
-        <!-- Booking Info -->
-        <tr>
-          <td style="padding:20px 24px 0;">
-            <p style="margin:0 0 10px;font-size:10px;letter-spacing:2px;color:#d8c3a5;text-transform:uppercase;font-weight:600;">Booking Details</p>
-            <table width="100%" cellpadding="0" cellspacing="0" style="background:#242424;border-radius:10px;overflow:hidden;">
-              <tr style="border-bottom:1px solid #2e2e2e;">
-                <td style="padding:12px 16px;font-size:12px;color:#888;width:45%;">Package</td>
-                <td style="padding:12px 16px;font-size:13px;color:#ffffff;font-weight:500;">{package_name}</td>
-              </tr>
-              {update_lines_html}
-            </table>
-          </td>
-        </tr>
-
-        <!-- CTA Button -->
-        <tr>
-          <td style="padding:24px;text-align:center;">
-            <a href="{bookings_url}" style="display:inline-block;background:#d8c3a5;color:#1a1a1a;text-decoration:none;font-size:14px;font-weight:700;padding:14px 32px;border-radius:30px;letter-spacing:0.5px;">
-              View My Bookings →
-            </a>
-            <p style="margin:16px 0 0;font-size:11px;color:#555;">Or paste this link in your browser:<br/>
-              <a href="{bookings_url}" style="color:#d8c3a5;word-break:break-all;">{bookings_url}</a>
-            </p>
-          </td>
-        </tr>
-
-        <!-- Footer -->
-        <tr>
-          <td style="padding:0 24px 24px;text-align:center;border-top:1px solid #2a2a2a;">
-            <p style="margin:16px 0 4px;font-size:11px;color:#555;">Best Regards, <strong style="color:#888;">Veloura Creations Team</strong></p>
-            <p style="margin:0;font-size:10px;color:#444;letter-spacing:1px;">VELOURA CREATIONS &bull; AUTOMATED STATUS UPDATE</p>
-          </td>
-        </tr>
-
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
-        send_email(booking.user.email, subject, plain_body, html_body=html_body)
-
+        _send_status_change_email(booking, status_changed, workflow_changed)
 
     # Auto-regenerate documents if any exist
     try:

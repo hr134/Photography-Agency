@@ -1,16 +1,16 @@
+import os
+import uuid
+import random
+import string
+from datetime import datetime
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.models.booking import Booking
 from app.models.package import Package
-from datetime import datetime
-
 from app.models.booking_event import BookingEvent
 from app.models.user import User
 from app.services.email_service import send_email
-import uuid
-import random
-import string
 
 bookings_bp = Blueprint('bookings', __name__)
 
@@ -69,6 +69,12 @@ def create_booking():
                 total_price += package.price
         else:
             total_price += package.price
+
+    if data.get('total_amount'):
+        try:
+            total_price = float(data.get('total_amount'))
+        except (ValueError, TypeError):
+            pass
 
     # Keep a primary event_date and venue for backward compatibility (using the first event)
     primary_date = None
@@ -133,12 +139,32 @@ def create_booking():
     
     db.session.commit()
     
-    # Send email notification to client
+    # Send email notifications (non-blocking)
+    try:
+        _send_booking_notifications(
+            current_user_id=current_user_id,
+            new_booking=new_booking,
+            client_email=client_email,
+            client_name=client_name,
+            client_phone=client_phone,
+            groom_name=groom_name,
+            bride_name=bride_name,
+            primary_date=primary_date,
+            payment_method=payment_method,
+            payment_transaction_id=payment_transaction_id
+        )
+    except Exception as email_err:
+        print(f"Non-critical error in booking email notifications: {email_err}")
+
+    return jsonify({"message": "Booking created successfully", "booking": new_booking.to_dict()}), 201
+
+
+def _send_booking_notifications(current_user_id, new_booking, client_email, client_name, client_phone, groom_name, bride_name, primary_date, payment_method, payment_transaction_id):
     user = User.query.get(current_user_id)
     pkg_name = new_booking.package.name if new_booking.package else "Unknown Package"
     site_url = os.environ.get("FRONTEND_URL", "https://photography-agency.onrender.com").rstrip("/")
     bookings_url = f"{site_url}/dashboard"
-    
+
     # Collect all recipient emails: login email + booking form email (deduplicated)
     email_recipients = set()
     if user and user.email:
@@ -417,8 +443,6 @@ Log into the admin dashboard to confirm this booking.
 </html>"""
         for recipient in notification_recipients:
             send_email(recipient, admin_subject, admin_plain, html_body=admin_html)
-    
-    return jsonify({"message": "Booking created successfully", "booking": new_booking.to_dict()}), 201
 
 
 @bookings_bp.route('/<int:id>/accept_agreement', methods=['PUT'])

@@ -26,7 +26,7 @@ async function handleResponse(response: Response) {
       throw new Error('Session expired or unauthorized.');
     }
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || 'API request failed');
+    throw new Error(errorData.message || errorData.error || errorData.msg || 'API request failed');
   }
   return response.json();
 }

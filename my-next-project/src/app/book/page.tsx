@@ -343,7 +343,8 @@ function BookForm() {
         payment_system: formData.payment_system,
         payment_transaction_id: formData.payment_transaction_id,
         payment_notes: formData.payment_notes,
-        advance_paid: advanceAmt
+        advance_paid: advanceAmt,
+        client_email: formData.client_email
       });
 
       setSuccess(true);
