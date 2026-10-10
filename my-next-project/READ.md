@@ -53,6 +53,29 @@ C:\Users\Harun Rashid\.gemini\antigravity-ide\brain\f5de6fcd-1f14-4f89-82b8-aeb5
 
 
 
+llow these quick steps:
+
+Open the Google Cloud Console Credentials Page.  https://console.cloud.google.com/apis/credentials
+
+Under OAuth 2.0 Client IDs, click your client:
+833413662852-m2d68gvcmit72qpr4t9jllrrl6ak8fn0...
+Scroll down to Authorized JavaScript origins:
+Click + ADD URI
+Paste:
+https://photography-agency.onrender.com
+Under Authorized redirect URIs (if present):
+Click + ADD URI
+Paste:
+https://photography-agency.onrender.com
+Click SAVE at the bottom.
+NOTE
+
+Google changes take 1 to 5 minutes to propagate across their servers. Once saved and Render deploys the latest commit (46593eb), your Google login button will open the account picker normally!
+
+
+
+
+
  https://myaccount.google.com/apppasswords
 
 If it says "2-Step Verification is not enabled", first go to https://myaccount.google.com/security and turn it on, then come back.

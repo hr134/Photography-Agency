@@ -225,15 +225,11 @@ export default function DeveloperScrollAnimation() {
 
       const progress = Math.max(0, Math.min(1, scrollY / scrollDistance));
 
-      const mobile = isMobileRef.current;
-      const hideThreshold = mobile ? scrollDistance + 290 : scrollDistance;
-
-      // If user has scrolled completely past the animation into the website contents,
-      // completely hide the canvas layer so it never lags or sits underneath website contents.
-      // On mobile, keep it visible until initial hero content ('AVAILABLE FOR PROJECTS' and headline)
-      // has arisen on the screen so 'Let's Begin' transitions smoothly.
-      if (scrollY >= hideThreshold && currentProgressRef.current >= 0.999) {
-        // FIX: Guard write with stickyHiddenRef — avoids repeated display reads/writes
+      // Solution 1: Immediate Canvas Sleep / Deactivation
+      // As soon as user finishes the sequence (scrollY >= scrollDistance or progress >= 0.999),
+      // instantly hide the sticky canvas so the GPU never wastes resources compositing the canvas
+      // underneath the mounting Hero & content sections.
+      if (scrollY >= scrollDistance || progress >= 0.999) {
         if (stickyRef.current && !stickyHiddenRef.current) {
           stickyRef.current.style.display = 'none';
           stickyHiddenRef.current = true;
@@ -242,10 +238,17 @@ export default function DeveloperScrollAnimation() {
           letsBeginRef.current.style.opacity = '0';
           letsBeginRef.current.style.display = 'none';
         }
+        targetProgressRef.current = 1;
+        currentProgressRef.current = 1;
+        isRunningRef.current = false;
+        if (animFrameIdRef.current) {
+          cancelAnimationFrame(animFrameIdRef.current);
+          animFrameIdRef.current = null;
+        }
         return;
       }
 
-      // Restore display if user scrolls back up toward the animation
+      // Restore display if user scrolls back up into the animation
       if (stickyRef.current && stickyHiddenRef.current) {
         stickyRef.current.style.display = 'block';
         stickyHiddenRef.current = false;
@@ -352,11 +355,11 @@ export default function DeveloperScrollAnimation() {
           stickyRef.current.style.opacity = '1';
           stickyRef.current.style.transform = 'scale(1)';
           stickyRef.current.style.filter = 'none';
-          // FIX: Guard display writes with stickyHiddenRef
-          if (extraScroll >= 280 && !stickyHiddenRef.current) {
+          // Immediately hide stickyRef when scroll reaches content to prevent compositor overlap
+          if ((extraScroll > 0 || progress >= 0.999) && !stickyHiddenRef.current) {
             stickyRef.current.style.display = 'none';
             stickyHiddenRef.current = true;
-          } else if (extraScroll < 280 && stickyHiddenRef.current) {
+          } else if (extraScroll === 0 && progress < 0.999 && stickyHiddenRef.current) {
             stickyRef.current.style.display = 'block';
             stickyHiddenRef.current = false;
           }
