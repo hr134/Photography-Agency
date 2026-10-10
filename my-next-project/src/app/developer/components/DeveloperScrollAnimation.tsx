@@ -15,10 +15,9 @@ export default function DeveloperScrollAnimation() {
   const stickyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const welcomeRef = useRef<HTMLDivElement>(null);
-  const letsBeginRef = useRef<HTMLDivElement>(null);
 
-  // Reactive scroll height for mobile vs desktop
-  const [scrollHeight, setScrollHeight] = useState('380vh');
+  // Fixed scroll height — same for mobile and desktop
+  const [scrollHeight] = useState('380vh');
 
   const imagesRef = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
   const currentFrameRef = useRef<number>(0);
@@ -130,12 +129,8 @@ export default function DeveloperScrollAnimation() {
     renderFrame(currentFrameRef.current);
   };
 
-  // Restore previous setup: full 380vh scroll track on BOTH mobile and desktop
-  // so all 300 frames finish smoothly before the website contents appear.
   const updateBreakpoint = () => {
-    const mobile = window.innerWidth < 768;
-    isMobileRef.current = mobile;
-    setScrollHeight('380vh');
+    isMobileRef.current = window.innerWidth < 768;
   };
 
   useEffect(() => {
@@ -225,19 +220,14 @@ export default function DeveloperScrollAnimation() {
 
       const progress = Math.max(0, Math.min(1, scrollY / scrollDistance));
 
-      const mobile = isMobileRef.current;
       const hideThreshold = scrollDistance + 10;
 
-      // If user has scrolled past the animation section into the website contents,
-      // hide the canvas layer immediately so GPU memory is 100% dedicated to hero content.
+      // If user has scrolled past the animation, hide sticky canvas so GPU is
+      // 100% dedicated to hero content.
       if (scrollY >= hideThreshold && currentProgressRef.current >= 0.999) {
         if (stickyRef.current && !stickyHiddenRef.current) {
           stickyRef.current.style.display = 'none';
           stickyHiddenRef.current = true;
-        }
-        if (letsBeginRef.current && letsBeginRef.current.style.display !== 'none') {
-          letsBeginRef.current.style.opacity = '0';
-          letsBeginRef.current.style.display = 'none';
         }
         return;
       }
@@ -294,91 +284,31 @@ export default function DeveloperScrollAnimation() {
         welcomeRef.current.style.display = wFade <= 0.001 ? 'none' : 'flex';
       }
 
-      // ── Mobile Transition: Fully separates 300-frame canvas from Hero Section ─
-      if (mobile) {
-        // Frame sequence finishes completely by progress 0.96.
-        // Between 0.94 and 0.98, the canvas cleanly fades to pure background.
-        if (canvasRef.current) {
-          if (progress >= 0.98) {
-            canvasRef.current.style.opacity = '0';
-            canvasRef.current.style.visibility = 'hidden';
-          } else if (progress >= 0.94) {
-            const cFade = Math.max(0, 1 - (progress - 0.94) / 0.04);
-            canvasRef.current.style.opacity = cFade.toFixed(4);
-            canvasRef.current.style.visibility = 'visible';
-          } else {
-            canvasRef.current.style.opacity = '1';
-            canvasRef.current.style.visibility = 'visible';
+      // ── Sticky canvas fade-out at the end (same for mobile & desktop) ──
+      if (stickyRef.current) {
+        const FADE_START = 0.94;
+        if (progress >= FADE_START) {
+          const fp = (progress - FADE_START) / (1 - FADE_START);
+          const opacity = Math.max(0, 1 - fp);
+          const scale = 1 + fp * 0.04;
+          const blur = fp * 8;
+          stickyRef.current.style.opacity = opacity.toFixed(4);
+          stickyRef.current.style.transform = `scale(${scale.toFixed(4)})`;
+          stickyRef.current.style.filter = blur > 0.1 ? `blur(${blur.toFixed(1)}px)` : 'none';
+          if (progress >= 0.999 && !stickyHiddenRef.current) {
+            stickyRef.current.style.display = 'none';
+            stickyHiddenRef.current = true;
+          } else if (progress < 0.999 && stickyHiddenRef.current) {
+            stickyRef.current.style.display = 'block';
+            stickyHiddenRef.current = false;
           }
-        }
-
-        // Dedicated 'Let's Begin' Mobile Transition Screen:
-        // Appears smoothly as canvas completes (0.95 -> 1.0)
-        // Stays solidly on screen throughout the buffer zone, shielding the viewport
-        // so the heavy 300-frame canvas is 100% idle before the Hero section starts
-        if (letsBeginRef.current) {
-          if (progress >= 0.999) {
-            // In the dedicated buffer zone, solidly visible
-            letsBeginRef.current.style.opacity = '1';
-            letsBeginRef.current.style.transform = 'translateY(0px)';
-            letsBeginRef.current.style.display = 'flex';
-          } else if (progress >= 0.94) {
-            const lbProgress = Math.min(1, Math.max(0, (progress - 0.94) / 0.05));
-            const lbY = (1 - lbProgress) * 20;
-            letsBeginRef.current.style.opacity = lbProgress.toFixed(4);
-            letsBeginRef.current.style.transform = `translateY(${lbY.toFixed(1)}px)`;
-            letsBeginRef.current.style.display = 'flex';
-          } else {
-            letsBeginRef.current.style.opacity = '0';
-            letsBeginRef.current.style.display = 'none';
-          }
-        }
-
-        if (stickyRef.current) {
+        } else {
           stickyRef.current.style.opacity = '1';
           stickyRef.current.style.transform = 'scale(1)';
           stickyRef.current.style.filter = 'none';
-
-          // Safe unmount: once scroll leaves the container completely, hide sticky canvas
-          if (progress >= 0.999 && !stickyHiddenRef.current) {
-            // Keep sticky visible until user starts scrolling into the hero section
+          if (stickyHiddenRef.current) {
             stickyRef.current.style.display = 'block';
-          }
-        }
-      } else {
-        // Desktop handling
-        if (canvasRef.current) {
-          canvasRef.current.style.opacity = '1';
-        }
-        if (letsBeginRef.current) {
-          letsBeginRef.current.style.display = 'none';
-        }
-
-        if (stickyRef.current) {
-          const FADE_START = 0.94;
-          if (progress >= FADE_START) {
-            const fp = (progress - FADE_START) / (1 - FADE_START);
-            const opacity = Math.max(0, 1 - fp);
-            const scale = 1 + fp * 0.04;
-            const blur = fp * 8;
-            stickyRef.current.style.opacity = opacity.toFixed(4);
-            stickyRef.current.style.transform = `scale(${scale.toFixed(4)})`;
-            stickyRef.current.style.filter = blur > 0.1 ? `blur(${blur.toFixed(1)}px)` : 'none';
-            if (progress >= 0.999 && !stickyHiddenRef.current) {
-              stickyRef.current.style.display = 'none';
-              stickyHiddenRef.current = true;
-            } else if (progress < 0.999 && stickyHiddenRef.current) {
-              stickyRef.current.style.display = 'block';
-              stickyHiddenRef.current = false;
-            }
-          } else {
-            stickyRef.current.style.opacity = '1';
-            stickyRef.current.style.transform = 'scale(1)';
-            stickyRef.current.style.filter = 'none';
-            if (stickyHiddenRef.current) {
-              stickyRef.current.style.display = 'block';
-              stickyHiddenRef.current = false;
-            }
+            stickyHiddenRef.current = false;
           }
         }
       }
@@ -481,42 +411,7 @@ export default function DeveloperScrollAnimation() {
           </div>
         </div>
 
-        {/* ── Mobile Outro Transition Overlay: Welcoming Attractive 'Let's Begin' ── */}
-        <div
-          ref={letsBeginRef}
-          className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-20 md:hidden px-6"
-          style={{ opacity: 0, display: 'none', willChange: 'opacity, transform' }}
-        >
-          {/* Ambient luminous glow backdrop */}
-          <div className="absolute w-72 h-72 rounded-full bg-gradient-to-tr from-purple-600/20 via-pink-500/15 to-cyan-500/20 blur-3xl -z-10 pointer-events-none" />
 
-          {/* Attractive Welcoming Typography: Editorial Serif Italic + Bold Modern Sans */}
-          <h2 className="text-center select-none tracking-tight">
-            <span
-              className="block font-serif italic font-normal text-white leading-[0.92]"
-              style={{
-                fontSize: 'clamp(3.8rem, 17vw, 5.4rem)',
-                textShadow: '0 2px 25px rgba(255,255,255,0.45), 0 0 50px rgba(168,85,247,0.3)',
-              }}
-            >
-              Let&apos;s
-            </span>
-            <span
-              className="block font-sans font-black tracking-[-0.03em] uppercase text-white leading-[0.88] mt-1"
-              style={{
-                fontSize: 'clamp(4.2rem, 19vw, 5.8rem)',
-                textShadow: '0 2px 30px rgba(255,255,255,0.4), 0 0 60px rgba(103,232,249,0.3)',
-              }}
-            >
-              Begin
-            </span>
-          </h2>
-
-          {/* Subtle scroll hint */}
-          <div className="mt-5 flex flex-col items-center gap-1.5 opacity-60">
-            <div className="w-px h-6 bg-gradient-to-b from-cyan-400 to-transparent animate-pulse" />
-          </div>
-        </div>
       </div>
     </section>
   );
