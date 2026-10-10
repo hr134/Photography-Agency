@@ -171,7 +171,7 @@ def _send_booking_notifications(current_user_id, new_booking, client_email, clie
         email_recipients.add(user.email.strip().lower())
     if client_email and client_email.strip():
         email_recipients.add(client_email.strip().lower())
-    
+    print(f"[Booking Email] Client recipients: {list(email_recipients)}", flush=True)
     if email_recipients:
         subject = f"Booking Confirmed — {pkg_name} | Veloura Creations"
         plain_body = f"""Dear {client_name or user.username},
@@ -298,7 +298,7 @@ Veloura Creations Team"""
     
     # Remove empty strings and deduplicate
     notification_recipients = list({e.strip() for e in notification_recipients if e.strip()})
-    
+    print(f"[Booking Email] Admin recipients: {notification_recipients}", flush=True)
     if notification_recipients:
         admin_subject = f"📋 New Booking — {client_name or 'Client'} | {pkg_name}"
         admin_plain = f"""New Booking Received

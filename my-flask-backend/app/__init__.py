@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask, send_from_directory, request
 from .config import config_by_name
 from .extensions import db, migrate, jwt, ma, cors

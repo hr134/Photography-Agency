@@ -13,6 +13,20 @@ services:
         generateValue: true
       - key: JWT_SECRET_KEY
         generateValue: true
+      - key: MAIL_SERVER
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USE_TLS
+        value: "true"
+      - key: MAIL_USE_SSL
+        value: "false"
+      - key: MAIL_USERNAME
+        value: velouracreations@gmail.com
+      - key: MAIL_PASSWORD
+        value: vlmfqhynjoawxcyv
+      - key: MAIL_DEFAULT_SENDER
+        value: Veloura Creations <velouracreations@gmail.com>
 
   # 2. Next.js Frontend Web Application
   - type: web
