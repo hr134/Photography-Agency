@@ -1,229 +1,156 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 
-const TOTAL_FRAMES = 300;
-
-// Format frame URL: /frames/ezgif-frame-001.jpg -> /frames/ezgif-frame-300.jpg
-function getFrameUrl(index: number): string {
-  const frameNum = String(index + 1).padStart(3, '0');
-  return `/frames/ezgif-frame-${frameNum}.jpg`;
-}
+// Place your video in /public/scroll.mp4 (and optionally /public/scroll.webm).
+// Convert from frames with FFmpeg:
+//   ffmpeg -framerate 30 -i public/frames/ezgif-frame-%03d.jpg \
+//          -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart \
+//          public/scroll.mp4
+const VIDEO_SRC_MP4 = '/scroll.mp4';
+const VIDEO_SRC_WEBM = '/scroll.webm';
 
 export default function DeveloperScrollAnimation() {
   const containerRef = useRef<HTMLDivElement>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const welcomeRef = useRef<HTMLDivElement>(null);
 
-  // Fixed scroll height — same for mobile and desktop
   const [scrollHeight] = useState('380vh');
 
-  const imagesRef = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
-  const currentFrameRef = useRef<number>(0);
   const targetProgressRef = useRef<number>(0);
   const currentProgressRef = useRef<number>(0);
   const animFrameIdRef = useRef<number | null>(null);
   const isRunningRef = useRef<boolean>(false);
-  // DPR stored in ref — re-applied before every canvas draw
   const dprRef = useRef<number>(1);
-  // FIX: Cache scrollY in onScroll, read in animateLoop — avoids forced layout in RAF
   const scrollYRef = useRef<number>(0);
   const scrollDistanceRef = useRef<number>(0);
-  // FIX: Track hidden state to avoid repeated style.display reads in hot path
   const stickyHiddenRef = useRef<boolean>(false);
-  // Cache isMobile in a ref — avoids reading window.innerWidth every RAF frame
   const isMobileRef = useRef<boolean>(false);
+  const lastSeekTimeRef = useRef<number>(-1);
+  const videoUnlockedRef = useRef<boolean>(false);
 
-  // Store last drawn image as fallback so frame scrubs never drop to blank or freeze
-  const lastDrawnImgRef = useRef<HTMLImageElement | null>(null);
-
-  // Responsive canvas draw helper with object-fit: cover
-  const drawImageCover = (
-    ctx: CanvasRenderingContext2D,
-    img: HTMLImageElement,
-    cssWidth: number,
-    cssHeight: number
-  ) => {
-    const dpr = dprRef.current;
-    // Re-apply DPR transform — canvas.width assignment resets the context transform
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = true;
-    // Mobile GPUs perform best with medium/bilinear smoothing (zero frame drops)
-    ctx.imageSmoothingQuality = isMobileRef.current ? 'medium' : 'high';
-
-    const imgWidth = img.naturalWidth || 1920;
-    const imgHeight = img.naturalHeight || 1080;
-
-    // Perfect cover calculation in CSS pixel space
-    const scale = Math.max(cssWidth / imgWidth, cssHeight / imgHeight);
-    const nw = imgWidth * scale;
-    const nh = imgHeight * scale;
-    const cx = (cssWidth - nw) * 0.5;
-    const cy = (cssHeight - nh) * 0.5;
-
-    ctx.clearRect(0, 0, cssWidth, cssHeight);
-    ctx.drawImage(img, cx, cy, nw, nh);
-  };
-
-  // O(1) bounded frame fallback
-  const getBestAvailableImage = (targetIndex: number): HTMLImageElement | null => {
-    const images = imagesRef.current;
-    if (images[targetIndex]?.complete && images[targetIndex]?.naturalWidth) {
-      return images[targetIndex];
-    }
-    // Search backward (already-loaded frames)
-    for (let offset = 1; offset <= 30; offset++) {
-      const prev = targetIndex - offset;
-      if (prev >= 0 && images[prev]?.complete && images[prev]?.naturalWidth) return images[prev];
-    }
-    // Then forward
-    for (let offset = 1; offset <= 30; offset++) {
-      const next = targetIndex + offset;
-      if (next < TOTAL_FRAMES && images[next]?.complete && images[next]?.naturalWidth) return images[next];
-    }
-    return lastDrawnImgRef.current;
-  };
-
-  const renderFrame = (frameIndex: number) => {
+  const drawVideoFrame = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const video = videoRef.current;
+    if (!canvas || !video || video.readyState < 2) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    const dpr = dprRef.current;
+    const cssW = parseInt(canvas.style.width) || window.innerWidth;
+    const cssH = parseInt(canvas.style.height) || window.innerHeight;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = isMobileRef.current ? 'medium' : 'high';
+    const vW = video.videoWidth || 1920;
+    const vH = video.videoHeight || 1080;
+    const scale = Math.max(cssW / vW, cssH / vH);
+    const nw = vW * scale;
+    const nh = vH * scale;
+    const cx = (cssW - nw) * 0.5;
+    const cy = (cssH - nh) * 0.5;
+    ctx.clearRect(0, 0, cssW, cssH);
+    ctx.drawImage(video, cx, cy, nw, nh);
+  };
 
-    let img = getBestAvailableImage(frameIndex);
-    if (!img && lastDrawnImgRef.current) {
-      img = lastDrawnImgRef.current;
-    }
-
-    if (img) {
-      lastDrawnImgRef.current = img;
-      const cssW = parseInt(canvas.style.width) || window.innerWidth;
-      const cssH = parseInt(canvas.style.height) || window.innerHeight;
-      drawImageCover(ctx, img, cssW, cssH);
+  const seekVideo = (time: number) => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 1) return;
+    if (Math.abs(time - lastSeekTimeRef.current) < 0.016) return;
+    lastSeekTimeRef.current = time;
+    if (typeof (video as any).fastSeek === 'function') {
+      (video as any).fastSeek(time);
+    } else {
+      video.currentTime = time;
     }
   };
 
-  // Update canvas resolution matching viewport
   const updateCanvasSize = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const isMobile = window.innerWidth < 768;
     isMobileRef.current = isMobile;
-
-    // Cap DPR at 2 on mobile to prevent creating massive multi-megapixel framebuffers that lag mobile GPUs
     const rawDpr = window.devicePixelRatio || 1;
     const dpr = isMobile ? Math.min(rawDpr, 2) : rawDpr;
     dprRef.current = dpr;
-
     const width = window.innerWidth;
     const height = window.innerHeight;
-
-    // Setting canvas.width resets context transform
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
-
-    renderFrame(currentFrameRef.current);
-  };
-
-  const updateBreakpoint = () => {
-    isMobileRef.current = window.innerWidth < 768;
+    drawVideoFrame();
   };
 
   useEffect(() => {
-    // 0. Set breakpoint + scroll height
-    updateBreakpoint();
-
-    // 1. Initial canvas size
+    isMobileRef.current = window.innerWidth < 768;
     updateCanvasSize();
 
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.loop = false;
+    video.setAttribute('webkit-playsinline', 'true');
+    video.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+
+    const srcWebm = document.createElement('source');
+    srcWebm.src = VIDEO_SRC_WEBM;
+    srcWebm.type = 'video/webm';
+    const srcMp4 = document.createElement('source');
+    srcMp4.src = VIDEO_SRC_MP4;
+    srcMp4.type = 'video/mp4';
+    video.appendChild(srcWebm);
+    video.appendChild(srcMp4);
+
+    document.body.appendChild(video);
+    videoRef.current = video;
+
+    const onLoadedMetadata = () => { seekVideo(0); };
+    const onSeeked = () => { drawVideoFrame(); };
+    video.addEventListener('loadedmetadata', onLoadedMetadata);
+    video.addEventListener('seeked', onSeeked);
+    video.load();
+
+    // iOS Safari: unlock video decoder on first touch/scroll
+    const unlockVideoForIOS = () => {
+      if (videoUnlockedRef.current) return;
+      videoUnlockedRef.current = true;
+      const p = video.play();
+      if (p !== undefined) {
+        p.then(() => {
+          video.pause();
+          video.currentTime = currentProgressRef.current * (video.duration || 1);
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('touchstart', unlockVideoForIOS, { once: true, passive: true });
+    window.addEventListener('scroll', unlockVideoForIOS, { once: true, passive: true });
+
     const handleResize = () => {
-      updateBreakpoint();
+      isMobileRef.current = window.innerWidth < 768;
       updateCanvasSize();
-      // Recalculate after layout settles on resize/orientation change
       if (containerRef.current) {
         scrollDistanceRef.current = containerRef.current.offsetHeight - window.innerHeight;
       }
     };
     window.addEventListener('resize', handleResize);
 
-    // 2. Preload first frame immediately for instant first-paint
-    const firstImg = new Image();
-    firstImg.src = getFrameUrl(0);
-    firstImg.onload = () => {
-      imagesRef.current[0] = firstImg;
-      lastDrawnImgRef.current = firstImg;
-      renderFrame(0);
-    };
-
-    // 3. Progressive preloading of all frames in background
-    let isCancelled = false;
-
-    const loadBatch = (indices: number[]) => {
-      indices.forEach((index) => {
-        if (imagesRef.current[index]) return;
-        const img = new Image();
-        img.src = getFrameUrl(index);
-        img.onload = () => {
-          if (!isCancelled) {
-            imagesRef.current[index] = img;
-            if (currentFrameRef.current === index) {
-              renderFrame(index);
-            }
-          }
-        };
-      });
-    };
-
-    // Priority 1: first 40 frames for immediate responsiveness
-    loadBatch(Array.from({ length: 40 }, (_, i) => i));
-
-    // Priority 2: stream remaining frames in steady chunks of 30
-    // so mobile network and image decoder never stall or freeze the UI
-    let currentBatchIndex = 40;
-    const loadNextBatch = () => {
-      if (isCancelled || currentBatchIndex >= TOTAL_FRAMES) return;
-      const nextBatch = [];
-      const end = Math.min(TOTAL_FRAMES, currentBatchIndex + 30);
-      for (let i = currentBatchIndex; i < end; i++) {
-        nextBatch.push(i);
-      }
-      currentBatchIndex = end;
-      loadBatch(nextBatch);
-      if (currentBatchIndex < TOTAL_FRAMES) {
-        setTimeout(loadNextBatch, 80);
-      }
-    };
-    const timer = setTimeout(loadNextBatch, 120);
-
-    // 4. Smooth scroll calculation loop with cached metrics & zero overhead when past
-    const updateMetrics = () => {
-      if (containerRef.current) {
-        // FIX: Store into ref so animateLoop reads from ref, not window.scrollY
-        scrollDistanceRef.current = containerRef.current.offsetHeight - window.innerHeight;
-      }
-    };
-    updateMetrics();
+    if (containerRef.current) {
+      scrollDistanceRef.current = containerRef.current.offsetHeight - window.innerHeight;
+    }
 
     const onScroll = () => {
       const scrollY = window.scrollY;
-      // FIX: Cache into ref — animateLoop reads scrollYRef.current instead of
-      // calling window.scrollY itself, which causes forced layout on mobile.
       scrollYRef.current = scrollY;
       const scrollDistance =
         scrollDistanceRef.current > 0 ? scrollDistanceRef.current : window.innerHeight * 2.8;
-
       if (scrollDistance <= 0) return;
 
       const progress = Math.max(0, Math.min(1, scrollY / scrollDistance));
-
       const hideThreshold = scrollDistance + 10;
 
-      // If user has scrolled past the animation, hide sticky canvas so GPU is
-      // 100% dedicated to hero content.
       if (scrollY >= hideThreshold && currentProgressRef.current >= 0.999) {
         if (stickyRef.current && !stickyHiddenRef.current) {
           stickyRef.current.style.display = 'none';
@@ -231,16 +158,11 @@ export default function DeveloperScrollAnimation() {
         }
         return;
       }
-
-      // Restore display if user scrolls back up toward the animation
       if (stickyRef.current && stickyHiddenRef.current) {
         stickyRef.current.style.display = 'block';
         stickyHiddenRef.current = false;
       }
-
       targetProgressRef.current = progress;
-
-      // Trigger animation loop if idle
       if (!isRunningRef.current) {
         isRunningRef.current = true;
         animFrameIdRef.current = requestAnimationFrame(animateLoop);
@@ -252,46 +174,32 @@ export default function DeveloperScrollAnimation() {
       const current = currentProgressRef.current;
       const mobile = isMobileRef.current;
 
-      // Lerp interpolation for buttery smooth inertial motion (snappy touch tracking on mobile)
       const diff = target - current;
       currentProgressRef.current += diff * (mobile ? 0.16 : 0.12);
-
-      // Once close enough, snap to target
-      if (Math.abs(diff) < 0.0004) {
-        currentProgressRef.current = target;
-      }
+      if (Math.abs(diff) < 0.0004) currentProgressRef.current = target;
 
       const progress = currentProgressRef.current;
 
-      // Map progress to frame index (0 to TOTAL_FRAMES - 1)
-      const targetFrame = Math.min(
-        TOTAL_FRAMES - 1,
-        Math.max(0, Math.floor(progress * (TOTAL_FRAMES - 1)))
-      );
-
-      if (targetFrame !== currentFrameRef.current) {
-        currentFrameRef.current = targetFrame;
-        renderFrame(targetFrame);
+      const vid = videoRef.current;
+      if (vid && vid.readyState >= 2 && vid.duration > 0) {
+        seekVideo(progress * vid.duration);
+        drawVideoFrame();
       }
 
-      // ── Welcome word: disappears fast / immediately as user starts scrolling ──
       if (welcomeRef.current) {
-        // Fast fade: gone within first 3% of scroll progress (was 7%)
         const wFade = Math.max(0, 1 - progress * 35);
-        const wY = -progress * 500;
         welcomeRef.current.style.opacity = wFade.toFixed(4);
-        welcomeRef.current.style.transform = `translateY(${wY.toFixed(1)}px)`;
+        welcomeRef.current.style.transform = `translateY(${(-progress * 500).toFixed(1)}px)`;
         welcomeRef.current.style.display = wFade <= 0.001 ? 'none' : 'flex';
       }
 
-      // ── Sticky canvas fade-out at the end (same for mobile & desktop) ──
       if (stickyRef.current) {
         const FADE_START = 0.94;
         if (progress >= FADE_START) {
           const fp = (progress - FADE_START) / (1 - FADE_START);
           const opacity = Math.max(0, 1 - fp);
           const scale = 1 + fp * 0.04;
-          const blur = fp * 8;
+          const blur = mobile ? 0 : fp * 8;
           stickyRef.current.style.opacity = opacity.toFixed(4);
           stickyRef.current.style.transform = `scale(${scale.toFixed(4)})`;
           stickyRef.current.style.filter = blur > 0.1 ? `blur(${blur.toFixed(1)}px)` : 'none';
@@ -313,7 +221,6 @@ export default function DeveloperScrollAnimation() {
         }
       }
 
-      // ── Signal nav: write done state only when changed ────────────────────
       if (containerRef.current) {
         const isDone = progress >= 0.98 ? 'true' : 'false';
         if (containerRef.current.dataset.done !== isDone) {
@@ -321,12 +228,6 @@ export default function DeveloperScrollAnimation() {
         }
       }
 
-      // FIX: Removed needsMobileContinuation.
-      // The previous code kept the RAF loop alive for 300px of extra scroll
-      // past the animation end — running canvas draws & DOM writes at 60fps
-      // right as the hero section mounted. This was the primary cause of the
-      // mobile freeze. onScroll fires on native scroll events and handles
-      // the extraScroll range without needing a self-perpetuating RAF loop.
       if (Math.abs(target - currentProgressRef.current) > 0.0004) {
         animFrameIdRef.current = requestAnimationFrame(animateLoop);
       } else {
@@ -335,27 +236,22 @@ export default function DeveloperScrollAnimation() {
     };
 
     window.addEventListener('scroll', onScroll, { passive: true });
-    // Initial call to set up starting position
     onScroll();
 
     return () => {
-      isCancelled = true;
-      clearTimeout(timer);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('scroll', onScroll);
-      if (animFrameIdRef.current) {
-        cancelAnimationFrame(animFrameIdRef.current);
-      }
+      window.removeEventListener('touchstart', unlockVideoForIOS);
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+      video.removeEventListener('loadedmetadata', onLoadedMetadata);
+      video.removeEventListener('seeked', onSeeked);
+      video.pause();
+      if (document.body.contains(video)) document.body.removeChild(video);
+      videoRef.current = null;
     };
   }, []);
 
   return (
-    /*
-     * z-index intentionally left at 0 on this scroll section.
-     * The <main z-10> content sits above, so once this section scrolls
-     * past the viewport the sticky canvas never bleeds over main content
-     * — fixing the mobile "content inside scroll" bug.
-     */
     <section
       ref={containerRef}
       id="scroll-animation"
@@ -363,7 +259,6 @@ export default function DeveloperScrollAnimation() {
       className="relative w-full bg-[#0a0a0a]"
       aria-hidden="true"
     >
-      {/* Sticky canvas — z-0, main content z-10 always wins */}
       <div
         ref={stickyRef}
         className="sticky top-0 left-0 w-full overflow-hidden bg-[#0a0a0a] will-change-[opacity,transform,filter]"
@@ -374,19 +269,14 @@ export default function DeveloperScrollAnimation() {
           className="absolute inset-0 block"
           style={{ imageRendering: 'auto' }}
         />
-
-        {/* ── Welcome overlay ── */}
         <div
           ref={welcomeRef}
           className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none z-10"
           style={{ willChange: 'opacity, transform' }}
         >
-          {/* Glowing label */}
           <p className="text-[10px] sm:text-xs font-mono tracking-[0.4em] text-cyan-400/80 uppercase mb-5 animate-pulse">
             PORTFOLIO
           </p>
-
-          {/* Giant gradient welcome word */}
           <h2
             className="font-black uppercase leading-none text-center"
             style={{
@@ -401,8 +291,6 @@ export default function DeveloperScrollAnimation() {
           >
             WELCOME
           </h2>
-
-          {/* Scroll hint */}
           <div className="mt-10 flex flex-col items-center gap-2 opacity-50">
             <div className="w-px h-8 bg-gradient-to-b from-transparent via-white/60 to-transparent animate-pulse" />
             <p className="text-[9px] sm:text-[10px] font-mono tracking-[0.35em] text-white/50 uppercase">
@@ -410,8 +298,6 @@ export default function DeveloperScrollAnimation() {
             </p>
           </div>
         </div>
-
-
       </div>
     </section>
   );
