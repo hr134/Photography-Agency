@@ -1,0 +1,112 @@
+{
+  "contact": {
+    "available": true,
+    "avatar_url": "/harun_avatar.jpg",
+    "custom_contacts": [
+      {
+        "id": "c1",
+        "label": "Role",
+        "link": "",
+        "value": "Software & Systems Engineer"
+      },
+      {
+        "id": "c2",
+        "label": "Expertise",
+        "link": "",
+        "value": "Full-Stack Architecture"
+      }
+    ],
+    "email": "hr1349891@gmail.com",
+    "location": "Dhaka, Bangladesh",
+    "phone": "+8801955850512",
+    "socials": [
+      {
+        "icon": "linkedin",
+        "id": "1",
+        "label": "LinkedIn",
+        "platform": "LinkedIn",
+        "url": "https://linkedin.com"
+      },
+      {
+        "icon": "github",
+        "id": "2",
+        "label": "GitHub",
+        "platform": "GitHub",
+        "url": "https://github.com/hr134"
+      },
+      {
+        "icon": "mail",
+        "id": "3",
+        "label": "hr1349891@gmail.com",
+        "platform": "Email",
+        "url": "mailto:hr1349891@gmail.com"
+      }
+    ],
+    "tagline": "Software & Systems Engineer available for architecture, engineering development and technical collaboration.",
+    "whatsapp": "+8801955850512"
+  },
+  "cvs": [
+    {
+      "id": "cv_1791494044222",
+      "title": "Systems Engineering Resume",
+      "subtitle": "Specialized in systems engineering, backend platforms & architecture",
+      "file_url": "/static/uploads/dev_cc2f0b7784.pdf",
+      "filename": "Harun Rashid CV.pdf",
+      "file_size": "130.9 KB",
+      "uploaded_at": "2026",
+      "is_primary": true,
+      "published": true
+    },
+    {
+      "id": "cv_1791494087442",
+      "title": "B2B Resume",
+      "subtitle": "Specialized in systems engineering, backend platforms & architecture",
+      "file_url": "/static/uploads/dev_d6a251e935.pdf",
+      "filename": "Harun Rashid_CV.pdf",
+      "file_size": "346.9 KB",
+      "uploaded_at": "2026",
+      "is_primary": false,
+      "published": true
+    }
+  ],
+  "about": {
+    "available": true,
+    "bio_long": "I am an engineer dedicated to designing robust software systems, computational workflows and scalable architectures. With a disciplined engineering background, I bridge foundational engineering principles with modern technologies to deliver software that is reliable, secure and built for scale.",
+    "bio_short": "Engineer focused on architecting resilient software systems, scalable backends and modern computational platforms with high technical precision.",
+    "headline": "HI, I'M HARUN",
+    "pillar1_desc": "Applying core computer science & software engineering principles to design resilient, fault-tolerant platforms.",
+    "pillar1_title": "ENGINEERING ARCHITECTURE",
+    "pillar2_desc": "Designing clean relational schemas, secure auth flows and resilient API endpoints engineered for production reliability.",
+    "pillar2_title": "SYSTEMS & SCALE",
+    "pillar3_desc": "Crafting fluid GPU micro-animations, accessible interfaces and refined interactions inspired by editorial design.",
+    "pillar3_title": "MOTION & INTERACTIVE UX",
+    "subheadline": "SOFTWARE & SYSTEMS ENGINEER",
+    "avatar_badge": "SOFT. ENGINEER"
+  },
+  "services": [
+    {
+      "description": "End-to-end responsive web applications built with Next.js, React, TypeScript and modern ecosystem tooling.",
+      "number": "01",
+      "tags": "Next.js, React, TypeScript, Tailwind CSS",
+      "title": "FULL-STACK & SYSTEMS ENGINEERING"
+    },
+    {
+      "description": "Robust RESTful API design, authentication systems and service layers with Python and Flask.",
+      "number": "02",
+      "tags": "Python, Flask, REST APIs, JWT Security",
+      "title": "SOFTWARE ARCHITECTURE & API DESIGN"
+    },
+    {
+      "description": "Relational schema design, migrations, efficient queries and data integrity using PostgreSQL and SQLAlchemy.",
+      "number": "03",
+      "tags": "PostgreSQL, SQLite, SQLAlchemy, Alembic",
+      "title": "DATABASE & DATA MODELING"
+    },
+    {
+      "description": "Editorial-grade typography, 3D scroll-driven mechanics and smooth GPU-accelerated micro-interactions.",
+      "number": "04",
+      "tags": "Framer Motion, 3D Perspective, Responsive UI",
+      "title": "INTERACTIVE UI & 3D MOTION UX"
+    }
+  ]
+}
