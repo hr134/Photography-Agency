@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import AnimatedSection from "@/app/components/AnimatedSection";
 import { ChevronDown, SlidersHorizontal, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { resolveImageUrl } from "@/lib/imageHelper";
 
 interface StoryItem {
   id: number;
@@ -50,7 +51,7 @@ export default function Stories() {
       <>
         <div className="overflow-hidden rounded-lg mb-4 relative aspect-[4/3] bg-neutral-900 border border-white/5">
           <img
-            src={story.image && story.image.startsWith('/') ? `http://localhost:5000${story.image}` : (story.image || '')}
+            src={resolveImageUrl(story.image, '/project_mockup_preview.jpg')}
             alt={story.couple}
             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700 brightness-95 group-hover:brightness-105"
             loading="lazy"

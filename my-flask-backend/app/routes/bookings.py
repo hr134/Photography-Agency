@@ -136,7 +136,7 @@ def create_booking():
     # Send email notification to client
     user = User.query.get(current_user_id)
     pkg_name = new_booking.package.name if new_booking.package else "Unknown Package"
-    site_url = "http://localhost:3000"  # Change to production URL when live
+    site_url = os.environ.get("FRONTEND_URL", "https://photography-agency.onrender.com").rstrip("/")
     bookings_url = f"{site_url}/dashboard"
     
     # Collect all recipient emails: login email + booking form email (deduplicated)

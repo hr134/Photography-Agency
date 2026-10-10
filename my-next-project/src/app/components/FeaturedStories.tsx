@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { resolveImageUrl } from "@/lib/imageHelper";
 
 interface StoryItem {
   id: number;
@@ -44,9 +45,10 @@ export default function FeaturedStories() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
       {stories.map((story) => {
-        const imageUrl = story.image && story.image.startsWith('/') 
-          ? `http://localhost:5000${story.image}` 
-          : (story.image || 'https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=2070&auto=format&fit=crop');
+        const imageUrl = resolveImageUrl(
+          story.image, 
+          'https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=2070&auto=format&fit=crop'
+        );
 
         const cardContent = (
           <>

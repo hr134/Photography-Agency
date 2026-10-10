@@ -27,10 +27,13 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    const backendBase = process.env.NEXT_PUBLIC_API_URL 
+      ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '') 
+      : 'http://localhost:5000';
     return [
       {
         source: '/static/uploads/:path*',
-        destination: 'http://localhost:5000/static/uploads/:path*',
+        destination: `${backendBase}/static/uploads/:path*`,
       },
     ];
   },

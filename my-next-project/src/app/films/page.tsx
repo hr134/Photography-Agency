@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
+import { resolveImageUrl } from "@/lib/imageHelper";
 
 interface FilmItem {
   id: string | number;
@@ -73,7 +74,7 @@ export default function Films() {
                   onClick={() => setActiveVideo(mainFilm)}
                 >
                   <img
-                    src={mainFilm.thumbnail && mainFilm.thumbnail.startsWith('/') ? `http://localhost:5000${mainFilm.thumbnail}` : (mainFilm.thumbnail || '')}
+                    src={resolveImageUrl(mainFilm.thumbnail, '/project_mockup_preview.jpg')}
                     className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     alt={mainFilm.title}
                   />
@@ -137,7 +138,7 @@ export default function Films() {
                     onClick={() => setActiveVideo(film)}
                   >
                     <img
-                      src={film.thumbnail && film.thumbnail.startsWith('/') ? `http://localhost:5000${film.thumbnail}` : (film.thumbnail || '')}
+                      src={resolveImageUrl(film.thumbnail, '/project_mockup_preview.jpg')}
                       alt={film.title}
                       className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700 opacity-80 group-hover:opacity-100"
                     />

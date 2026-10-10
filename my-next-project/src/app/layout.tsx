@@ -32,7 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${playfair.variable} font-sans bg-[#0f0f0f] text-[#f5f5f0] min-h-screen flex flex-col`}>
-        <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID"}>
+        <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "833413662852-m2d68gvcmit72qpr4t9jllrrl6ak8fn0.apps.googleusercontent.com"}>
           <AuthProvider>
             <AgencyShell>
               {children}

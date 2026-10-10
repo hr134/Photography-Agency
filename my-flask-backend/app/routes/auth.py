@@ -27,7 +27,7 @@ def verify_google_token(token):
     Verify a Google ID token using Google's tokeninfo endpoint.
     Returns idinfo dict on success, raises ValueError on failure.
     """
-    client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "833413662852-m2d68gvcmit72qpr4t9jllrrl6ak8fn0.apps.googleusercontent.com").strip()
     
     # Method 1: Use google-auth library with clock skew tolerance
     try:
@@ -290,7 +290,8 @@ def forgot_password():
     token = serializer.dumps(email, salt='password-reset-salt')
     
     # Send email
-    reset_url = f"http://localhost:3000/reset-password?token={token}"
+    frontend_url = os.environ.get("FRONTEND_URL", "https://photography-agency.onrender.com").rstrip("/")
+    reset_url = f"{frontend_url}/reset-password?token={token}"
     subject = "Password Reset Request | Veloura Creations"
     
     plain_body = f"""Hello,

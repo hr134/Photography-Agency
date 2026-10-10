@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
+import { resolveImageUrl } from "@/lib/imageHelper";
 import { Plus, Trash2, Edit2, Loader2, Image, Video } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -171,9 +172,9 @@ export default function PortfolioAdmin() {
               >
                 <div className="aspect-video relative bg-black">
                   {activeTab === "stories" ? (
-                    <img src={item.image && item.image.startsWith('/') ? `http://localhost:5000${item.image}` : (item.image || '')} alt={item.couple} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                    <img src={resolveImageUrl(item.image)} alt={item.couple} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                   ) : (
-                    <img src={item.thumbnail && item.thumbnail.startsWith('/') ? `http://localhost:5000${item.thumbnail}` : (item.thumbnail || '')} alt={item.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                    <img src={resolveImageUrl(item.thumbnail)} alt={item.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                   )}
                 </div>
                 <div className="p-4">

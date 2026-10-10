@@ -245,7 +245,7 @@ def update_booking(booking_id):
         
         booking_ref = booking.booking_number or f"BK-{booking.id:06d}"
         package_name = booking.package.name if booking.package else "Unknown Package"
-        site_url = "http://localhost:3000"  # Change to production URL when live
+        site_url = os.environ.get("FRONTEND_URL", "https://photography-agency.onrender.com").rstrip("/")
         bookings_url = f"{site_url}/dashboard"
         
         update_lines_html = ""
