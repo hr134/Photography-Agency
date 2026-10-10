@@ -33,3 +33,6 @@ def create_app(config_name="development"):
         return send_from_directory(upload_folder, filename, as_attachment=as_attachment)
 
     return app
+
+# Expose default application instance for WSGI runners (e.g. gunicorn app:app)
+app = create_app(os.getenv("FLASK_CONFIG", "production"))
