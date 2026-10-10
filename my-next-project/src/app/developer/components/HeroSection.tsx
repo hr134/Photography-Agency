@@ -49,10 +49,10 @@ export default function HeroSection() {
       id="hero"
       className="relative min-h-screen bg-[#0a0a0a] text-white pt-16 sm:pt-28 pb-16 flex flex-col justify-between w-full max-w-full overflow-hidden"
     >
-      {/* Ambient background glow - static CSS blur, zero scroll recalculation */}
+      {/* Ambient background glow - lightweight on mobile, rich on desktop */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-gradient-to-tr from-purple-600/20 via-cyan-500/10 to-transparent rounded-full blur-[140px]" />
-        <div className="absolute top-1/2 right-0 w-[400px] h-[400px] bg-gradient-to-bl from-pink-600/10 to-transparent rounded-full blur-[100px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-gradient-to-tr from-purple-600/20 via-cyan-500/10 to-transparent rounded-full blur-[60px] md:blur-[140px]" />
+        <div className="absolute top-1/2 right-0 w-[400px] h-[400px] bg-gradient-to-bl from-pink-600/10 to-transparent rounded-full blur-[40px] md:blur-[100px]" />
       </div>
 
       {/* Grid overlay */}

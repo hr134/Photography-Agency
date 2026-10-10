@@ -106,3 +106,17 @@ restart flask bakcend
 
 ...\my-flask-backend > 
 .\venv\Scripts\python.exe app.py
+
+
+
+
+
+
+
+
+
+Solution 1: Immediate Canvas Sleep / Deactivation
+As soon as progress >= 0.99 (or extraScroll > 10):
+
+Immediately set stickyRef.current.style.visibility = 'hidden' (or display: 'none').
+Stop rendering canvas frames so the GPU can dedicate 100% of its resources to rendering the Hero Section.

@@ -225,11 +225,12 @@ export default function DeveloperScrollAnimation() {
 
       const progress = Math.max(0, Math.min(1, scrollY / scrollDistance));
 
-      // Solution 1: Immediate Canvas Sleep / Deactivation
-      // As soon as user finishes the sequence (scrollY >= scrollDistance or progress >= 0.999),
-      // instantly hide the sticky canvas so the GPU never wastes resources compositing the canvas
-      // underneath the mounting Hero & content sections.
-      if (scrollY >= scrollDistance || progress >= 0.999) {
+      const mobile = isMobileRef.current;
+      const hideThreshold = scrollDistance + 10;
+
+      // If user has scrolled past the animation section into the website contents,
+      // hide the canvas layer immediately so GPU memory is 100% dedicated to hero content.
+      if (scrollY >= hideThreshold && currentProgressRef.current >= 0.999) {
         if (stickyRef.current && !stickyHiddenRef.current) {
           stickyRef.current.style.display = 'none';
           stickyHiddenRef.current = true;
@@ -238,17 +239,10 @@ export default function DeveloperScrollAnimation() {
           letsBeginRef.current.style.opacity = '0';
           letsBeginRef.current.style.display = 'none';
         }
-        targetProgressRef.current = 1;
-        currentProgressRef.current = 1;
-        isRunningRef.current = false;
-        if (animFrameIdRef.current) {
-          cancelAnimationFrame(animFrameIdRef.current);
-          animFrameIdRef.current = null;
-        }
         return;
       }
 
-      // Restore display if user scrolls back up into the animation
+      // Restore display if user scrolls back up toward the animation
       if (stickyRef.current && stickyHiddenRef.current) {
         stickyRef.current.style.display = 'block';
         stickyHiddenRef.current = false;
@@ -300,48 +294,37 @@ export default function DeveloperScrollAnimation() {
         welcomeRef.current.style.display = wFade <= 0.001 ? 'none' : 'flex';
       }
 
-      // ── Mobile Transition Overlay: Welcoming attractive 'Let's Begin' ─────────
+      // ── Mobile Transition: Fully separates 300-frame canvas from Hero Section ─
       if (mobile) {
-        // FIX: Read from ref — no forced layout inside RAF
-        const scrollY = scrollYRef.current;
-        const scrollDistance =
-          scrollDistanceRef.current > 0 ? scrollDistanceRef.current : window.innerHeight * 2.8;
-        const extraScroll = Math.max(0, scrollY - scrollDistance);
-
-        // 1. Canvas fade to black between 0.88 and 0.94
+        // Frame sequence finishes completely by progress 0.96.
+        // Between 0.94 and 0.98, the canvas cleanly fades to pure background.
         if (canvasRef.current) {
-          if (progress >= 0.88) {
-            const cFade = Math.max(0, 1 - (progress - 0.88) / 0.06);
+          if (progress >= 0.98) {
+            canvasRef.current.style.opacity = '0';
+            canvasRef.current.style.visibility = 'hidden';
+          } else if (progress >= 0.94) {
+            const cFade = Math.max(0, 1 - (progress - 0.94) / 0.04);
             canvasRef.current.style.opacity = cFade.toFixed(4);
+            canvasRef.current.style.visibility = 'visible';
           } else {
             canvasRef.current.style.opacity = '1';
+            canvasRef.current.style.visibility = 'visible';
           }
         }
 
-        // 2. 'Let's Begin' welcoming text
-        // - Appears smoothly around progress 0.86 - 0.92 as frames darken
-        // - Stays prominently visible through the end of the scroll track (progress 1.0)
-        // - Stays visible as portfolio contents start arising from the bottom (extraScroll 0 -> ~130px)
-        // - Fades out & is gone once "AVAILABLE FOR PROJECTS" and headline arise on screen (~130px - 260px)
+        // Dedicated 'Let's Begin' Mobile Transition Screen:
+        // Appears smoothly as canvas completes (0.95 -> 1.0)
+        // Stays solidly on screen throughout the buffer zone, shielding the viewport
+        // so the heavy 300-frame canvas is 100% idle before the Hero section starts
         if (letsBeginRef.current) {
-          if (extraScroll >= 260) {
-            // Completely gone after hero contents have arisen
-            letsBeginRef.current.style.opacity = '0';
-            letsBeginRef.current.style.display = 'none';
-          } else if (extraScroll > 130) {
-            // Smooth exit as 'AVAILABLE FOR PROJECTS' and headline ('HI, I'M') arise on screen
-            const exitFade = Math.max(0, 1 - (extraScroll - 130) / 130);
-            letsBeginRef.current.style.opacity = exitFade.toFixed(4);
-            letsBeginRef.current.style.display = 'flex';
-          } else if (progress >= 0.92) {
-            // Solidly visible during outro and as top hero content begins arising
+          if (progress >= 0.999) {
+            // In the dedicated buffer zone, solidly visible
             letsBeginRef.current.style.opacity = '1';
             letsBeginRef.current.style.transform = 'translateY(0px)';
             letsBeginRef.current.style.display = 'flex';
-          } else if (progress >= 0.86) {
-            // Smooth entrance in center of screen
-            const lbProgress = Math.min(1, Math.max(0, (progress - 0.86) / 0.06));
-            const lbY = (1 - lbProgress) * 16;
+          } else if (progress >= 0.94) {
+            const lbProgress = Math.min(1, Math.max(0, (progress - 0.94) / 0.05));
+            const lbY = (1 - lbProgress) * 20;
             letsBeginRef.current.style.opacity = lbProgress.toFixed(4);
             letsBeginRef.current.style.transform = `translateY(${lbY.toFixed(1)}px)`;
             letsBeginRef.current.style.display = 'flex';
@@ -355,13 +338,11 @@ export default function DeveloperScrollAnimation() {
           stickyRef.current.style.opacity = '1';
           stickyRef.current.style.transform = 'scale(1)';
           stickyRef.current.style.filter = 'none';
-          // Immediately hide stickyRef when scroll reaches content to prevent compositor overlap
-          if ((extraScroll > 0 || progress >= 0.999) && !stickyHiddenRef.current) {
-            stickyRef.current.style.display = 'none';
-            stickyHiddenRef.current = true;
-          } else if (extraScroll === 0 && progress < 0.999 && stickyHiddenRef.current) {
+
+          // Safe unmount: once scroll leaves the container completely, hide sticky canvas
+          if (progress >= 0.999 && !stickyHiddenRef.current) {
+            // Keep sticky visible until user starts scrolling into the hero section
             stickyRef.current.style.display = 'block';
-            stickyHiddenRef.current = false;
           }
         }
       } else {

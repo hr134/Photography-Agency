@@ -29,19 +29,29 @@ export default function HarunPortfolioPage() {
         <HeroSection />
 
         {/* 2. ABOUT SECTION */}
-        <AboutSection />
+        <div style={{ contentVisibility: 'auto', containIntrinsicSize: '0 800px' }}>
+          <AboutSection />
+        </div>
 
         {/* 3. SKILLS / SERVICES SECTION */}
-        <SkillsSection />
+        <div style={{ contentVisibility: 'auto', containIntrinsicSize: '0 800px' }}>
+          <SkillsSection />
+        </div>
 
         {/* 4. PROJECTS SECTION (3D Stacked Wix Studio Scrolling Animation) */}
-        <ProjectsSection />
+        <div style={{ contentVisibility: 'auto', containIntrinsicSize: '0 1200px' }}>
+          <ProjectsSection />
+        </div>
 
         {/* 5. CV & CREDENTIALS SECTION */}
-        <CVSection />
+        <div style={{ contentVisibility: 'auto', containIntrinsicSize: '0 700px' }}>
+          <CVSection />
+        </div>
 
         {/* 6. CONTACT SECTION (Editable by Admin) */}
-        <ContactSection />
+        <div style={{ contentVisibility: 'auto', containIntrinsicSize: '0 600px' }}>
+          <ContactSection />
+        </div>
 
         {/* 7. FOOTER */}
         <HarunFooter />
