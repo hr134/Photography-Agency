@@ -1,24 +1,36 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
 
-// Place your video in /public/scroll.mp4 (and optionally /public/scroll.webm).
-// Convert from frames with FFmpeg:
-//   ffmpeg -framerate 30 -i public/frames/ezgif-frame-%03d.jpg \
-//          -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart \
-//          public/scroll.mp4
+const TOTAL_FRAMES = 300;
 const VIDEO_SRC_MP4 = '/scroll.mp4';
 const VIDEO_SRC_WEBM = '/scroll.webm';
+
+// Helper to format frame URLs for mobile 300-image sequence
+function getFrameUrl(index: number): string {
+  const frameNum = String(index + 1).padStart(3, '0');
+  return `/frames/ezgif-frame-${frameNum}.jpg`;
+}
 
 export default function DeveloperScrollAnimation() {
   const containerRef = useRef<HTMLDivElement>(null);
   const stickyRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const welcomeRef = useRef<HTMLDivElement>(null);
 
-  const [scrollHeight] = useState('380vh');
+  // Video ref for desktop view
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoInitializedRef = useRef<boolean>(false);
+  const lastSeekTimeRef = useRef<number>(-1);
 
+  // Image frames ref for mobile view
+  const imagesRef = useRef<(HTMLImageElement | null)[]>(new Array(TOTAL_FRAMES).fill(null));
+  const currentFrameRef = useRef<number>(0);
+  const lastDrawnImgRef = useRef<HTMLImageElement | null>(null);
+  const imagesLoadedRef = useRef<boolean>(false);
+
+  // Animation & scroll states
+  const [scrollHeight] = useState('380vh');
   const targetProgressRef = useRef<number>(0);
   const currentProgressRef = useRef<number>(0);
   const animFrameIdRef = useRef<number | null>(null);
@@ -28,9 +40,8 @@ export default function DeveloperScrollAnimation() {
   const scrollDistanceRef = useRef<number>(0);
   const stickyHiddenRef = useRef<boolean>(false);
   const isMobileRef = useRef<boolean>(false);
-  const lastSeekTimeRef = useRef<number>(-1);
-  const videoUnlockedRef = useRef<boolean>(false);
 
+  // ── Desktop video drawing helper ──────────────────────────────────────────
   const drawVideoFrame = () => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -42,7 +53,7 @@ export default function DeveloperScrollAnimation() {
     const cssH = parseInt(canvas.style.height) || window.innerHeight;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = isMobileRef.current ? 'medium' : 'high';
+    ctx.imageSmoothingQuality = 'high';
     const vW = video.videoWidth || 1920;
     const vH = video.videoHeight || 1080;
     const scale = Math.max(cssW / vW, cssH / vH);
@@ -66,6 +77,69 @@ export default function DeveloperScrollAnimation() {
     }
   };
 
+  // ── Mobile image drawing helper (object-fit: cover) ────────────────────────
+  const drawImageCover = (
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    cssWidth: number,
+    cssHeight: number
+  ) => {
+    const dpr = dprRef.current;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'medium';
+
+    const imgWidth = img.naturalWidth || 1920;
+    const imgHeight = img.naturalHeight || 1080;
+
+    const scale = Math.max(cssWidth / imgWidth, cssHeight / imgHeight);
+    const nw = imgWidth * scale;
+    const nh = imgHeight * scale;
+    const cx = (cssWidth - nw) * 0.5;
+    const cy = (cssHeight - nh) * 0.5;
+
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    ctx.drawImage(img, cx, cy, nw, nh);
+  };
+
+  const getBestAvailableImage = (targetIndex: number): HTMLImageElement | null => {
+    const images = imagesRef.current;
+    if (images[targetIndex]?.complete && images[targetIndex]?.naturalWidth) {
+      return images[targetIndex];
+    }
+    // Search backward
+    for (let offset = 1; offset <= 30; offset++) {
+      const prev = targetIndex - offset;
+      if (prev >= 0 && images[prev]?.complete && images[prev]?.naturalWidth) return images[prev];
+    }
+    // Search forward
+    for (let offset = 1; offset <= 30; offset++) {
+      const next = targetIndex + offset;
+      if (next < TOTAL_FRAMES && images[next]?.complete && images[next]?.naturalWidth) return images[next];
+    }
+    return lastDrawnImgRef.current;
+  };
+
+  const renderFrame = (frameIndex: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let img = getBestAvailableImage(frameIndex);
+    if (!img && lastDrawnImgRef.current) {
+      img = lastDrawnImgRef.current;
+    }
+
+    if (img) {
+      lastDrawnImgRef.current = img;
+      const cssW = parseInt(canvas.style.width) || window.innerWidth;
+      const cssH = parseInt(canvas.style.height) || window.innerHeight;
+      drawImageCover(ctx, img, cssW, cssH);
+    }
+  };
+
+  // ── Canvas resize ──────────────────────────────────────────────────────────
   const updateCanvasSize = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -80,56 +154,121 @@ export default function DeveloperScrollAnimation() {
     canvas.height = Math.round(height * dpr);
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
-    drawVideoFrame();
+
+    if (isMobile) {
+      renderFrame(currentFrameRef.current);
+    } else {
+      drawVideoFrame();
+    }
   };
 
   useEffect(() => {
+    let isCancelled = false;
+    let batchTimer: NodeJS.Timeout | null = null;
+
     isMobileRef.current = window.innerWidth < 768;
     updateCanvasSize();
 
-    const video = document.createElement('video');
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = 'auto';
-    video.loop = false;
-    video.setAttribute('webkit-playsinline', 'true');
-    video.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+    // ── Function to initialize mobile 300-image preloading ───────────────────
+    const initMobileImages = () => {
+      if (imagesLoadedRef.current) return;
+      imagesLoadedRef.current = true;
 
-    const srcWebm = document.createElement('source');
-    srcWebm.src = VIDEO_SRC_WEBM;
-    srcWebm.type = 'video/webm';
-    const srcMp4 = document.createElement('source');
-    srcMp4.src = VIDEO_SRC_MP4;
-    srcMp4.type = 'video/mp4';
-    video.appendChild(srcWebm);
-    video.appendChild(srcMp4);
+      const firstImg = new Image();
+      firstImg.src = getFrameUrl(0);
+      firstImg.onload = () => {
+        if (isCancelled) return;
+        imagesRef.current[0] = firstImg;
+        lastDrawnImgRef.current = firstImg;
+        if (isMobileRef.current) renderFrame(0);
+      };
 
-    document.body.appendChild(video);
-    videoRef.current = video;
+      const loadBatch = (indices: number[]) => {
+        indices.forEach((index) => {
+          if (imagesRef.current[index]) return;
+          const img = new Image();
+          img.src = getFrameUrl(index);
+          img.onload = () => {
+            if (!isCancelled) {
+              imagesRef.current[index] = img;
+              if (isMobileRef.current && currentFrameRef.current === index) {
+                renderFrame(index);
+              }
+            }
+          };
+        });
+      };
 
-    const onLoadedMetadata = () => { seekVideo(0); };
-    const onSeeked = () => { drawVideoFrame(); };
-    video.addEventListener('loadedmetadata', onLoadedMetadata);
-    video.addEventListener('seeked', onSeeked);
-    video.load();
+      // Priority 1: first 40 frames for instant touch responsiveness
+      loadBatch(Array.from({ length: 40 }, (_, i) => i));
 
-    // iOS Safari: unlock video decoder on first touch/scroll
-    const unlockVideoForIOS = () => {
-      if (videoUnlockedRef.current) return;
-      videoUnlockedRef.current = true;
-      const p = video.play();
-      if (p !== undefined) {
-        p.then(() => {
-          video.pause();
-          video.currentTime = currentProgressRef.current * (video.duration || 1);
-        }).catch(() => {});
-      }
+      // Priority 2: stream remaining frames in chunks of 30
+      let currentBatchIndex = 40;
+      const loadNextBatch = () => {
+        if (isCancelled || currentBatchIndex >= TOTAL_FRAMES) return;
+        const nextBatch = [];
+        const end = Math.min(TOTAL_FRAMES, currentBatchIndex + 30);
+        for (let i = currentBatchIndex; i < end; i++) nextBatch.push(i);
+        currentBatchIndex = end;
+        loadBatch(nextBatch);
+        if (currentBatchIndex < TOTAL_FRAMES) {
+          batchTimer = setTimeout(loadNextBatch, 80);
+        }
+      };
+      batchTimer = setTimeout(loadNextBatch, 120);
     };
-    window.addEventListener('touchstart', unlockVideoForIOS, { once: true, passive: true });
-    window.addEventListener('scroll', unlockVideoForIOS, { once: true, passive: true });
+
+    // ── Function to initialize desktop video scrubbing ──────────────────────
+    const initDesktopVideo = () => {
+      if (videoInitializedRef.current) return;
+      videoInitializedRef.current = true;
+
+      const video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.preload = 'auto';
+      video.loop = false;
+      video.setAttribute('webkit-playsinline', 'true');
+      video.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+
+      const srcWebm = document.createElement('source');
+      srcWebm.src = VIDEO_SRC_WEBM;
+      srcWebm.type = 'video/webm';
+      const srcMp4 = document.createElement('source');
+      srcMp4.src = VIDEO_SRC_MP4;
+      srcMp4.type = 'video/mp4';
+      video.appendChild(srcWebm);
+      video.appendChild(srcMp4);
+
+      document.body.appendChild(video);
+      videoRef.current = video;
+
+      const onLoadedMetadata = () => {
+        if (!isMobileRef.current) seekVideo(0);
+      };
+      const onSeeked = () => {
+        if (!isMobileRef.current) drawVideoFrame();
+      };
+      video.addEventListener('loadedmetadata', onLoadedMetadata);
+      video.addEventListener('seeked', onSeeked);
+      video.load();
+    };
+
+    // Initial setup according to current viewport
+    if (isMobileRef.current) {
+      initMobileImages();
+    } else {
+      initDesktopVideo();
+    }
 
     const handleResize = () => {
-      isMobileRef.current = window.innerWidth < 768;
+      const mobile = window.innerWidth < 768;
+      isMobileRef.current = mobile;
+      if (mobile) {
+        initMobileImages();
+      } else {
+        initDesktopVideo();
+      }
       updateCanvasSize();
       if (containerRef.current) {
         scrollDistanceRef.current = containerRef.current.offsetHeight - window.innerHeight;
@@ -180,10 +319,23 @@ export default function DeveloperScrollAnimation() {
 
       const progress = currentProgressRef.current;
 
-      const vid = videoRef.current;
-      if (vid && vid.readyState >= 2 && vid.duration > 0) {
-        seekVideo(progress * vid.duration);
-        drawVideoFrame();
+      if (mobile) {
+        // Mobile view: 300 pictures scroll exactly as before
+        const targetFrame = Math.min(
+          TOTAL_FRAMES - 1,
+          Math.max(0, Math.floor(progress * (TOTAL_FRAMES - 1)))
+        );
+        if (targetFrame !== currentFrameRef.current) {
+          currentFrameRef.current = targetFrame;
+          renderFrame(targetFrame);
+        }
+      } else {
+        // Desktop & other views: scrub video
+        const vid = videoRef.current;
+        if (vid && vid.readyState >= 2 && vid.duration > 0) {
+          seekVideo(progress * vid.duration);
+          drawVideoFrame();
+        }
       }
 
       if (welcomeRef.current) {
@@ -239,15 +391,17 @@ export default function DeveloperScrollAnimation() {
     onScroll();
 
     return () => {
+      isCancelled = true;
+      if (batchTimer) clearTimeout(batchTimer);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('touchstart', unlockVideoForIOS);
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
-      video.removeEventListener('loadedmetadata', onLoadedMetadata);
-      video.removeEventListener('seeked', onSeeked);
-      video.pause();
-      if (document.body.contains(video)) document.body.removeChild(video);
-      videoRef.current = null;
+      if (videoRef.current) {
+        const v = videoRef.current;
+        v.pause();
+        if (document.body.contains(v)) document.body.removeChild(v);
+        videoRef.current = null;
+      }
     };
   }, []);
 
